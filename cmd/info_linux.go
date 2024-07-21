@@ -1,10 +1,14 @@
+//go:build linux
 // +build linux
 
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/jezek/xgb"
@@ -20,13 +24,13 @@ func Kernel() string {
 	procver, _ := os.ReadFile("/proc/version")
 
 	// /proc/version has the same format with "Linux version <kern-version>" as the 3rd
-	// word, `procver` is []byte so has to be converted 
+	// word, `procver` is []byte so has to be converted
 	return strings.Split(string(procver), " ")[2]
 }
 
 func Shell() string {
 	shellenv := strings.Split(os.Getenv("SHELL"), "/")
-	return shellenv[len(shellenv) - 1]
+	return shellenv[len(shellenv)-1]
 }
 
 func WM() string {
@@ -52,7 +56,7 @@ func WM() string {
 		}
 
 		splitBin := strings.Split(bin, "/")
-		return splitBin[len(splitBin) - 1]
+		return splitBin[len(splitBin)-1]
 	}
 	X, err := xgb.NewConn()
 	if err != nil {
@@ -79,14 +83,14 @@ func WM() string {
 
 	// and its value
 	reply, err := xproto.GetProperty(X, false, root, activeAtom.Atom,
-		xproto.GetPropertyTypeAny, 0, (1 << 32) - 1).Reply()
+		xproto.GetPropertyTypeAny, 0, (1<<32)-1).Reply()
 	if err != nil {
 		return "Unknown"
 	}
 	windowID := xproto.Window(xgb.Get32(reply.Value))
 
 	reply, err = xproto.GetProperty(X, false, windowID, nameAtom.Atom,
-	xproto.GetPropertyTypeAny, 0, (1<<32)-1).Reply()
+		xproto.GetPropertyTypeAny, 0, (1<<32)-1).Reply()
 	if err != nil {
 		return "Unknown"
 	}
@@ -94,3 +98,68 @@ func WM() string {
 	return string(reply.Value)
 }
 
+func Terminal() string {
+	var term string
+
+	// Check parent processes
+	parent := os.Getppid()
+	for term == "" {
+		ppid := fmt.Sprintf("%d", parent)
+		ppid, err := getPPID(ppid)
+		if err != nil || ppid == "" {
+			break
+		}
+		parentName, err := getProcessName(ppid)
+		if err != nil || parentName == "" {
+			break
+		}
+
+		switch parentName {
+		case "sh", "bash", "zsh", "screen", "su", "newgrp":
+		case "login", "init", "systemd", "sshd":
+			term = "tty"
+		case "gnome-terminal-":
+			term = "gnome-terminal"
+		case "urxvtd":
+			term = "urxvt"
+		case "nvim":
+			term = "Neovim Terminal"
+		case "NeoVimServer":
+			term = "VimR Terminal"
+		default:
+			if filepath.Base(parentName) == parentName {
+				term = parentName
+			}
+			if strings.HasSuffix(term, "-wrapped") {
+				term = strings.TrimSuffix(term, "-wrapped")
+			}
+		}
+
+		if term != "" {
+			break
+		}
+		parent, _ = strconv.Atoi(ppid)
+	}
+
+	return term
+}
+
+// getPPID returns the parent process ID of a given PID.
+func getPPID(pid string) (string, error) {
+	cmd := exec.Command("ps", "-p", pid, "-o", "ppid=")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// getProcessName returns the name of the process given its PID.
+func getProcessName(pid string) (string, error) {
+	cmd := exec.Command("ps", "-p", pid, "-o", "comm=")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}

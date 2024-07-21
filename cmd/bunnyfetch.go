@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/joho/godotenv"
+	"github.com/spf13/cobra"
 )
 
 var noDistroColor = false
 var RootCmd = &cobra.Command{
-	Use: "bunnyfetch",
+	Use:   "bunnyfetch",
 	Short: "Tiny system info fetch utility.",
 	Run: func(cmd *cobra.Command, args []string) {
 		bunnyfetch()
@@ -19,12 +19,12 @@ var RootCmd = &cobra.Command{
 var r = "\033[0m"
 var foot = "\033[31m\"" + r
 
-var Bunny =
-`            %s
+var Bunny = `            %s
             %s
    (\ /)    %s
    ( . .)   %s
    c(%s)(%s)  %s
+	    %s
 `
 
 func init() {
@@ -41,7 +41,8 @@ func bunnyfetch() {
 		kernelinf(),
 		shellinf(),
 		foot, foot,
-		wminf())
+		wminf(),
+		terminal())
 	fmt.Printf("\n         ")
 	for i := 0; i < 8; i++ {
 		fmt.Printf("\033[4%dm   ", i)
@@ -79,3 +80,6 @@ func wminf() string {
 	return "\033[35mWM " + r + WM()
 }
 
+func terminal() string {
+	return "\033[36mTerminal " + r + Terminal()
+}
